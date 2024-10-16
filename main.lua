@@ -28,6 +28,10 @@ for x = 1, gridWidth do
     end
 end
 
+love.mouse.setVisible(false)
+
+local cursor = maid64.newImage("cursor.png")
+
 function love.update(dt)
     if state == "selecting" then
         if love.keyboard.isDown("w") then
@@ -70,6 +74,8 @@ function love.draw()
     end
 
     love.graphics.print("Porcodio!", 10, 10)
+
+    love.graphics.draw(cursor, maid64.mouse.getX() - cursor:getWidth() / 2, maid64.mouse.getY() - cursor:getHeight() / 2)
 
     maid64.finish()
 end
