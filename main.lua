@@ -1,7 +1,6 @@
 local maid64 = require("maid64")
-local color = require("colorPicker")
 
-local width, height = 16 * 16, 16 * 16
+local width, height = 256, 256
 
 local assets = maid64.newImage("roguelike.png")
 
@@ -19,11 +18,7 @@ local gridHeight = 16
 local cellSize = 16
 local grid = {}
 
-color:create(50, 50, 100)
-
-color.sc = {145/255, 183/255, 201/255}
-
-local font = love.graphics.newImageFont("font.png", " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-=[]\\,./;')!@#$%^&*(+{}!<>?:\"", 1)
+local font = love.graphics.newFont(10, "mono")
 love.graphics.setFont(font)
 
 for x = 1, gridWidth do
@@ -47,15 +42,13 @@ function love.update(dt)
         if love.keyboard.isDown("a") then
             selectingX = selectingX + 1
         end
-    elseif state == "color" then
-        color:update()
     end
 end
 
 function love.draw()
     maid64.start()
 
-    love.graphics.clear(color.sc)
+    love.graphics.clear(145/255, 183/255, 201/255)
 
     if state == "selecting" then
         love.graphics.draw(assets, selectingX, selectingY)
@@ -74,9 +67,6 @@ function love.draw()
         love.graphics.setColor(1, 1, 1, 0.8)
         love.graphics.draw(assets, selected, gridX * cellSize, gridY * cellSize)
         love.graphics.setColor(1, 1, 1, 1)
-    elseif state == "color" then
-        color:draw()
-        love.graphics.setColor(1, 1, 1)
     end
 
     love.graphics.print("Porcodio!", 10, 10)
@@ -87,8 +77,6 @@ end
 function love.keypressed(key)
     if key == "space" then
         state = "selecting"
-    elseif key == "c" then
-        state = "color"
     end
 end
 
