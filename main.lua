@@ -1,10 +1,10 @@
-local maid64 = require("maid64")
+local scaler = require("scaler")
 
 local width, height = 256, 256
 
-local assets = maid64.newImage("roguelike.png")
+local assets = scaler.newImage("roguelike.png")
 
-maid64.setup(width, height)
+scaler.setup(width, height)
 
 local selected
 
@@ -30,7 +30,7 @@ end
 
 love.mouse.setVisible(false)
 
-local cursor = maid64.newImage("cursor.png")
+local cursor = scaler.newImage("cursor.png")
 
 function love.update(dt)
     if state == "selecting" then
@@ -50,7 +50,7 @@ function love.update(dt)
 end
 
 function love.draw()
-    maid64.start()
+    scaler.start()
 
     love.graphics.clear(145/255, 183/255, 201/255)
 
@@ -65,8 +65,8 @@ function love.draw()
             end
         end
 
-        local gridX = math.floor(maid64.mouse.getX() / cellSize)
-        local gridY = math.floor(maid64.mouse.getY() / cellSize)
+        local gridX = math.floor(scaler.mouse.getX() / cellSize)
+        local gridY = math.floor(scaler.mouse.getY() / cellSize)
 
         love.graphics.setColor(1, 1, 1, 0.8)
         love.graphics.draw(assets, selected, gridX * cellSize, gridY * cellSize)
@@ -75,14 +75,14 @@ function love.draw()
 
     love.graphics.print("Porcodio!", 10, 10)
 
-    local mouseX = maid64.mouse.getX()
-    local mouseY = maid64.mouse.getY()
+    local mouseX = scaler.mouse.getX()
+    local mouseY = scaler.mouse.getY()
 
     if (mouseX > 0 and mouseX < width - 1) and (mouseY > 0 and mouseY < height - 1) then
         love.graphics.draw(cursor, mouseX - 4, mouseY - 1)
     end
 
-    maid64.finish()
+    scaler.finish()
 end
 
 function love.keypressed(key)
@@ -94,27 +94,27 @@ end
 function love.mousepressed(x, y, button)
     if button == 1 then
         if state == "selecting" then
-            local mouseX = maid64.mouse.getX()
-            local mouseY = maid64.mouse.getY()
+            local mouseX = scaler.mouse.getX()
+            local mouseY = scaler.mouse.getY()
 
             if mouseX >= 0 and mouseX <= width and mouseY >= 0 and mouseY <= height then
-                local sheetX = math.floor((maid64.mouse.getX() - selectingX) / cellSize)
-                local sheetY = math.floor((maid64.mouse.getY() - selectingY) / cellSize)
+                local sheetX = math.floor((scaler.mouse.getX() - selectingX) / cellSize)
+                local sheetY = math.floor((scaler.mouse.getY() - selectingY) / cellSize)
 
                 selected = love.graphics.newQuad(sheetX * cellSize, sheetY * cellSize, cellSize, cellSize, assets:getDimensions())
                 state = "drawing"
             end
         elseif state == "drawing" then
-            local gridX = math.floor(maid64.mouse.getX() / cellSize) + 1
-            local gridY = math.floor(maid64.mouse.getY() / cellSize) + 1
+            local gridX = math.floor(scaler.mouse.getX() / cellSize) + 1
+            local gridY = math.floor(scaler.mouse.getY() / cellSize) + 1
 
             if gridX >= 1 and gridX <= gridWidth and gridY >= 1 and gridY <= gridHeight then
                 grid[gridX][gridY] = selected
             end
         end
     elseif button == 2 then
-        local gridX = math.floor(maid64.mouse.getX() / cellSize) + 1
-        local gridY = math.floor(maid64.mouse.getY() / cellSize) + 1
+        local gridX = math.floor(scaler.mouse.getX() / cellSize) + 1
+        local gridY = math.floor(scaler.mouse.getY() / cellSize) + 1
 
         if gridX >= 1 and gridX <= gridWidth and gridY >= 1 and gridY <= gridHeight then
             grid[gridX][gridY] = nil
@@ -123,5 +123,5 @@ function love.mousepressed(x, y, button)
 end
 
 function love.resize(w, h)
-    maid64.resize(w, h)
+    scaler.resize(w, h)
 end
