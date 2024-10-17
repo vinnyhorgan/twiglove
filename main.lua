@@ -8,6 +8,7 @@ local CELL_SIZE = 16
 
 local STATES = {
     AREAS = 1,
+    EDIT = 2,
 }
 
 -- CLASSES
@@ -59,6 +60,11 @@ local areas = {
 
 local currentArea = 1
 local state = STATES.AREAS
+local newAreaId = 1
+
+local prevMouseState = {false, false, false}
+
+local selectedTile = nil
 
 -- ASSETS
 
@@ -77,6 +83,35 @@ scaler.setup(WIDTH, HEIGHT)
 areas[1]:setTile(1, 1, Tile(assets, 5, 5))
 areas[1]:setTile(5, 5, Tile(assets, 5, 5))
 
+function mousepressed(button)
+    local state = love.mouse.isDown(button)
+
+    if state and not prevMouseState[button] then
+        prevMouseState[button] = true
+        return true
+    else
+        prevMouseState[button] = state
+    end
+
+    return false
+end
+
+function button(x, y, w, h, text)
+    local mouseX = scaler.mouse.getX()
+    local mouseY = scaler.mouse.getY()
+
+    if mouseX >= x and mouseX <= x + w and mouseY >= y and mouseY <= y + h then
+        love.graphics.setColor(0.8, 0.8, 0.8)
+    end
+
+    love.graphics.rectangle("line", x, y, w, h, 4, 4)
+    love.graphics.print(text, x + w / 2 - math.floor(font:getWidth(text) / 2), y + h / 2 - math.floor(font:getHeight() / 2))
+
+    love.graphics.setColor(1, 1, 1)
+
+    return mouseX >= x and mouseX <= x + w and mouseY >= y and mouseY <= y + h and mousepressed(1)
+end
+
 function love.draw()
     scaler.start()
 
@@ -85,27 +120,46 @@ function love.draw()
     if state == STATES.AREAS then
         areas[currentArea]:draw()
 
-        love.graphics.rectangle("line", 10, 10, WIDTH - 20, 30, 4, 4)
-        love.graphics.print(areas[currentArea].name, WIDTH / 2 - math.floor(font:getWidth(areas[currentArea].name) / 2), 20)
-    end
+        if button(10, 10, 200, 30, areas[currentArea].name) then
+        end
 
-    if state == "selecting" then
-        love.graphics.draw(assets, selectingX, selectingY)
-    elseif state == "drawing" then
-        for x = 1, gridWidth do
-            for y = 1, gridHeight do
-                if grid[x][y] then
-                    love.graphics.draw(assets, grid[x][y], (x - 1) * cellSize, (y - 1) * cellSize)
-                end
+        if button(WIDTH - 40, 10, 30, 30, "+") then
+            table.insert(areas, Area("New Area " .. newAreaId))
+            newAreaId = newAreaId + 1
+            currentArea = #areas
+        end
+
+        if button(10, HEIGHT - 40, 30, 30, "<") then
+            currentArea = currentArea - 1
+            if currentArea < 1 then
+                currentArea = #areas
             end
         end
 
-        local gridX = math.floor(scaler.mouse.getX() / cellSize)
-        local gridY = math.floor(scaler.mouse.getY() / cellSize)
+        if button(WIDTH - 40, HEIGHT - 40, 30, 30, ">") then
+            currentArea = currentArea + 1
+            if currentArea > #areas then
+                currentArea = 1
+            end
+        end
 
-        love.graphics.setColor(1, 1, 1, 0.8)
-        love.graphics.draw(assets, selected, gridX * cellSize, gridY * cellSize)
-        love.graphics.setColor(1, 1, 1, 1)
+        if button(WIDTH / 2 - 50, HEIGHT - 40, 100, 30, "Edit") then
+            state = STATES.EDIT
+            selectedTile = Tile(assets, 4, 4)
+        end
+    elseif state == STATES.EDIT then
+        areas[currentArea]:draw()
+
+        local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE)
+        local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE)
+
+        love.graphics.setColor(1, 1, 1, 0.5)
+        love.graphics.draw(assets, selectedTile.quad, gridX * CELL_SIZE, gridY * CELL_SIZE)
+        love.graphics.setColor(1, 1, 1)
+
+        if love.keyboard.isDown("escape") then
+            state = STATES.AREAS
+        end
     end
 
     local mouseX = scaler.mouse.getX()
@@ -131,37 +185,18 @@ function love.keypressed(key)
                 currentArea = 1
             end
         end
+    elseif state == STATES.EDIT then
+        if key == "escape" then
+            state = STATES.AREAS
+        end
     end
 end
 
 function love.mousepressed(x, y, button)
-    if button == 1 then
-        if state == "selecting" then
-            local mouseX = scaler.mouse.getX()
-            local mouseY = scaler.mouse.getY()
-
-            if mouseX >= 0 and mouseX <= WIDTH and mouseY >= 0 and mouseY <= HEIGHT then
-                local sheetX = math.floor((scaler.mouse.getX() - selectingX) / cellSize)
-                local sheetY = math.floor((scaler.mouse.getY() - selectingY) / cellSize)
-
-                selected = love.graphics.newQuad(sheetX * cellSize, sheetY * cellSize, cellSize, cellSize, assets:getDimensions())
-                state = "drawing"
-            end
-        elseif state == "drawing" then
-            local gridX = math.floor(scaler.mouse.getX() / cellSize) + 1
-            local gridY = math.floor(scaler.mouse.getY() / cellSize) + 1
-
-            if gridX >= 1 and gridX <= gridWidth and gridY >= 1 and gridY <= gridHeight then
-                grid[gridX][gridY] = selected
-            end
-        end
-    elseif button == 2 then
-        local gridX = math.floor(scaler.mouse.getX() / cellSize) + 1
-        local gridY = math.floor(scaler.mouse.getY() / cellSize) + 1
-
-        if gridX >= 1 and gridX <= gridWidth and gridY >= 1 and gridY <= gridHeight then
-            grid[gridX][gridY] = nil
-        end
+    if state == STATES.EDIT then
+        local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
+        local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
+        areas[currentArea]:setTile(gridX, gridY, selectedTile)
     end
 end
 
