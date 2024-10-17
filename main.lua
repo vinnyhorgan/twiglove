@@ -75,7 +75,12 @@ function love.draw()
 
     love.graphics.print("Porcodio!", 10, 10)
 
-    love.graphics.draw(cursor, maid64.mouse.getX() - cursor:getWidth() / 2, maid64.mouse.getY() - cursor:getHeight() / 2)
+    local mouseX = maid64.mouse.getX()
+    local mouseY = maid64.mouse.getY()
+
+    if (mouseX > 0 and mouseX < width - 1) and (mouseY > 0 and mouseY < height - 1) then
+        love.graphics.draw(cursor, mouseX - 4, mouseY - 1)
+    end
 
     maid64.finish()
 end
