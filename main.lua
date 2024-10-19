@@ -9,6 +9,7 @@ local CELL_SIZE = 16
 local STATES = {
     AREAS = 1,
     EDIT = 2,
+    SELECT = 3,
 }
 
 -- CLASSES
@@ -65,6 +66,8 @@ local newAreaId = 1
 local prevMouseState = {false, false, false}
 
 local selectedTile = nil
+local selectX = 0
+local selectY = 0
 
 -- ASSETS
 
@@ -112,6 +115,32 @@ function button(x, y, w, h, text)
     return mouseX >= x and mouseX <= x + w and mouseY >= y and mouseY <= y + h and mousepressed(1)
 end
 
+function love.update(dt)
+    if state == STATES.EDIT then
+        if love.mouse.isDown(1) then
+            local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
+            local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
+            areas[currentArea]:setTile(gridX, gridY, selectedTile)
+        elseif love.mouse.isDown(2) then
+            local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
+            local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
+            areas[currentArea]:setTile(gridX, gridY, nil)
+        end
+    elseif state == STATES.SELECT then
+        if love.keyboard.isDown("w") then
+            selectY = selectY + 2
+        elseif love.keyboard.isDown("s") then
+            selectY = selectY - 2
+        end
+
+        if love.keyboard.isDown("a") then
+            selectX = selectX + 2
+        elseif love.keyboard.isDown("d") then
+            selectX = selectX - 2
+        end
+    end
+end
+
 function love.draw()
     scaler.start()
 
@@ -153,13 +182,23 @@ function love.draw()
         local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE)
         local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE)
 
-        love.graphics.setColor(1, 1, 1, 0.5)
+        if love.mouse.isDown(2) then
+            love.graphics.setColor(1, 0, 0, 0.5)
+        else
+            love.graphics.setColor(1, 1, 1, 0.5)
+        end
+
         love.graphics.draw(assets, selectedTile.quad, gridX * CELL_SIZE, gridY * CELL_SIZE)
         love.graphics.setColor(1, 1, 1)
+    elseif state == STATES.SELECT then
+        love.graphics.draw(assets, selectX, selectY)
 
-        if love.keyboard.isDown("escape") then
-            state = STATES.AREAS
-        end
+        local sheetX = math.floor((scaler.mouse.getX() - selectX) / CELL_SIZE)
+        local sheetY = math.floor((scaler.mouse.getY() - selectY) / CELL_SIZE) -- this doesn't work
+
+        love.graphics.setColor(1, 1, 1, 0.5)
+        love.graphics.rectangle("line", selectX + sheetX * CELL_SIZE, selectY + sheetY * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+        love.graphics.setColor(1, 1, 1)
     end
 
     local mouseX = scaler.mouse.getX()
@@ -188,15 +227,24 @@ function love.keypressed(key)
     elseif state == STATES.EDIT then
         if key == "escape" then
             state = STATES.AREAS
+        elseif key == "e" then
+            state = STATES.SELECT
+        end
+    elseif state == STATES.SELECT then
+        if key == "e" then
+            state = STATES.EDIT
         end
     end
 end
 
 function love.mousepressed(x, y, button)
-    if state == STATES.EDIT then
-        local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
-        local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
-        areas[currentArea]:setTile(gridX, gridY, selectedTile)
+    if state == STATES.SELECT then
+        if button == 1 then
+            local sheetX = math.floor((scaler.mouse.getX() - selectX) / CELL_SIZE)
+            local sheetY = math.floor((scaler.mouse.getY() - selectY) / CELL_SIZE)
+            selectedTile = Tile(assets, sheetX, sheetY)
+            state = STATES.EDIT
+        end
     end
 end
 
