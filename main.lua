@@ -13,6 +13,7 @@ local STATES = {
     EDITMENU = 4,
     SELECT = 5,
     PLAY = 6,
+    COLORPICKER = 7,
 }
 
 -- CLASSES
@@ -34,6 +35,7 @@ local Area = Object:extend()
 
 function Area:new(name)
     self.name = name
+    self.background = {145 / 255, 183 / 255, 201 / 255}
 
     self.grid = {}
 
@@ -82,6 +84,8 @@ function Area:setCollision(x, y, collision)
 end
 
 function Area:draw()
+    love.graphics.clear(self.background[1], self.background[2], self.background[3])
+
     for x = 1, WIDTH / CELL_SIZE do
         for y = 1, HEIGHT / CELL_SIZE do
             local tile = self.grid[x][y]
@@ -120,6 +124,8 @@ local selectY = 0
 
 local delayT = 0
 
+local selectedColor = {1, 1, 1}
+
 -- ASSETS
 
 local assets = scaler.newImage("roguelike.png")
@@ -148,7 +154,7 @@ scaler.setup(WIDTH, HEIGHT)
 areas[1]:setTile(1, 1, Tile(assets, 5, 5))
 areas[1]:setTile(5, 5, Tile(assets, 5, 5))
 
-function mousepressed(button)
+local function mousepressed(button)
     local state = love.mouse.isDown(button)
 
     if state and not prevMouseState[button] then
@@ -161,7 +167,7 @@ function mousepressed(button)
     return false
 end
 
-function button(x, y, w, h, text)
+local function button(x, y, w, h, text)
     local mouseX = scaler.mouse.getX()
     local mouseY = scaler.mouse.getY()
 
@@ -175,6 +181,24 @@ function button(x, y, w, h, text)
     love.graphics.setColor(1, 1, 1)
 
     return mouseX >= x and mouseX <= x + w and mouseY >= y and mouseY <= y + h and mousepressed(1)
+end
+
+local function slider(x, y, value, max)
+    local mouseX = scaler.mouse.getX()
+    local mouseY = scaler.mouse.getY()
+
+    love.graphics.rectangle("fill", x, y, 100, 10)
+    love.graphics.setColor(0, 0, 0)
+    local sliderPos = (value / max) * 100
+    love.graphics.rectangle("fill", x + sliderPos - 5, y - 2, 10, 14)
+
+    if mouseX >= x and mouseX <= x + 100 and mouseY >= y and mouseY <= y + 10 and love.mouse.isDown(1) then
+        value = (mouseX - x) / 100 * max
+    end
+
+    love.graphics.setColor(1, 1, 1)
+
+    return math.min(math.max(value, 0), max)
 end
 
 function love.update(dt)
@@ -212,13 +236,15 @@ function love.update(dt)
         elseif love.keyboard.isDown("d") then
             selectX = selectX - 2
         end
+    elseif state == STATES.COLORPICKER then
+        selectedColor[1] = slider(50, 50, selectedColor[1], 1)
+        selectedColor[2] = slider(50, 80, selectedColor[2], 1)
+        selectedColor[3] = slider(50, 110, selectedColor[3], 1)
     end
 end
 
 function love.draw()
     scaler.start()
-
-    love.graphics.clear(145 / 255, 183 / 255, 201 / 255)
 
     if state == STATES.AREAS then
         areas[currentArea]:draw()
@@ -247,7 +273,7 @@ function love.draw()
         end
 
         if button(WIDTH / 2 - 50, HEIGHT - 40, 100, 30, "Edit") then
-            state = STATES.EDIT
+            state = STATES.EDITMENU
             delayT = 0
             selectedTile = Tile(assets, 4, 4)
         end
@@ -292,6 +318,8 @@ function love.draw()
     elseif state == STATES.EDITMENU then
         areas[currentArea]:draw()
 
+        love.graphics.print("Press SPACE to start editing", 10, 10)
+
         if button(10, HEIGHT - 40, 60, 30, "Sprites") then
             state = STATES.SELECT
         end
@@ -300,7 +328,13 @@ function love.draw()
             state = STATES.EDITCOLL
             delayT = 0
         end
+
+        if button(WIDTH / 2 - 50, HEIGHT - 40, 100, 30, "Background") then
+            state = STATES.COLORPICKER
+        end
     elseif state == STATES.SELECT then
+        love.graphics.clear(areas[currentArea].background[1], areas[currentArea].background[2], areas[currentArea].background[3])
+
         love.graphics.draw(assets, selectX, selectY)
 
         local sheetX = math.floor((scaler.mouse.getX() - selectX) / CELL_SIZE)
@@ -317,6 +351,25 @@ function love.draw()
         else
             love.graphics.draw(player.spritesheet, player.quad, (player.x - 1) * CELL_SIZE, (player.y - 1) * CELL_SIZE)
         end
+    elseif state == STATES.COLORPICKER then
+        love.graphics.clear(0.5, 0.5, 0.5)
+
+        love.graphics.print("Color Picker: Use sliders to adjust RGB", 10, 10)
+        love.graphics.print("Red: " .. math.floor(selectedColor[1] * 255), 10, 50)
+        love.graphics.print("Green: " .. math.floor(selectedColor[2] * 255), 10, 80)
+        love.graphics.print("Blue: " .. math.floor(selectedColor[3] * 255), 10, 110)
+
+        -- Draw RGB sliders
+        selectedColor[1] = slider(150, 50, selectedColor[1], 1)
+        selectedColor[2] = slider(150, 80, selectedColor[2], 1)
+        selectedColor[3] = slider(150, 110, selectedColor[3], 1)
+
+        -- Show preview of the selected color
+        love.graphics.setColor(selectedColor[1], selectedColor[2], selectedColor[3])
+        love.graphics.rectangle("fill", 50, 150, 100, 50)
+        love.graphics.setColor(1, 1, 1)
+
+        love.graphics.print("Press Enter to apply color, Esc to cancel", 10, 200)
     end
 
     local mouseX = scaler.mouse.getX()
@@ -386,6 +439,11 @@ function love.keypressed(key)
                 player.x = player.x + 1
             end
             player.flip = true
+        end
+    elseif state == STATES.COLORPICKER then
+        if key == "return" then
+            areas[currentArea].background = {selectedColor[1], selectedColor[2], selectedColor[3]}
+            state = STATES.EDITMENU
         end
     end
 end
