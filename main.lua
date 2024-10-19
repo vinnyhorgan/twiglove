@@ -9,7 +9,10 @@ local CELL_SIZE = 16
 local STATES = {
     AREAS = 1,
     EDIT = 2,
-    SELECT = 3,
+    EDITCOLL = 3,
+    EDITMENU = 4,
+    SELECT = 5,
+    PLAY = 6,
 }
 
 -- CLASSES
@@ -21,16 +24,41 @@ function Tile:new(spritesheet, sheetX, sheetY)
     self.quad = love.graphics.newQuad(sheetX * CELL_SIZE, sheetY * CELL_SIZE, CELL_SIZE, CELL_SIZE, self.spritesheet:getDimensions())
 end
 
+local Entity = Tile:extend()
+
+function Entity:new(spritesheet, sheetX, sheetY)
+    Entity.super.new(self, spritesheet, sheetX, sheetY)
+end
+
 local Area = Object:extend()
 
 function Area:new(name)
     self.name = name
+
     self.grid = {}
 
     for x = 1, WIDTH / CELL_SIZE do
         self.grid[x] = {}
         for y = 1, HEIGHT / CELL_SIZE do
             self.grid[x][y] = nil
+        end
+    end
+
+    self.entities = {}
+
+    for x = 1, WIDTH / CELL_SIZE do
+        self.entities[x] = {}
+        for y = 1, HEIGHT / CELL_SIZE do
+            self.entities[x][y] = nil
+        end
+    end
+
+    self.collision = {}
+
+    for x = 1, WIDTH / CELL_SIZE do
+        self.collision[x] = {}
+        for y = 1, HEIGHT / CELL_SIZE do
+            self.collision[x][y] = false
         end
     end
 end
@@ -41,12 +69,33 @@ function Area:setTile(x, y, tile)
     end
 end
 
+function Area:setEntity(x, y, entity)
+    if x >= 1 and x <= WIDTH / CELL_SIZE and y >= 1 and y <= HEIGHT / CELL_SIZE then
+        self.entities[x][y] = entity
+    end
+end
+
+function Area:setCollision(x, y, collision)
+    if x >= 1 and x <= WIDTH / CELL_SIZE and y >= 1 and y <= HEIGHT / CELL_SIZE then
+        self.collision[x][y] = collision
+    end
+end
+
 function Area:draw()
     for x = 1, WIDTH / CELL_SIZE do
         for y = 1, HEIGHT / CELL_SIZE do
             local tile = self.grid[x][y]
             if tile then
                 love.graphics.draw(tile.spritesheet, tile.quad, (x - 1) * CELL_SIZE, (y - 1) * CELL_SIZE)
+            end
+        end
+    end
+
+    for x = 1, WIDTH / CELL_SIZE do
+        for y = 1, HEIGHT / CELL_SIZE do
+            local entity = self.entities[x][y]
+            if entity then
+                love.graphics.draw(entity.spritesheet, entity.quad, (x - 1) * CELL_SIZE, (y - 1) * CELL_SIZE)
             end
         end
     end
@@ -69,6 +118,8 @@ local selectedTile = nil
 local selectX = 0
 local selectY = 0
 
+local delayT = 0
+
 -- ASSETS
 
 local assets = scaler.newImage("roguelike.png")
@@ -80,6 +131,17 @@ local font = love.graphics.newFont(10, "mono")
 love.graphics.setFont(font)
 
 -- SETUP
+
+local player = {
+    area = 1,
+    x = 2,
+    y = 2,
+    spritesheet = assets,
+    quad = love.graphics.newQuad(18 * CELL_SIZE, 32 * CELL_SIZE, CELL_SIZE, CELL_SIZE, assets:getDimensions()),
+    flip = false,
+}
+
+love.keyboard.setKeyRepeat(true)
 
 scaler.setup(WIDTH, HEIGHT)
 
@@ -116,8 +178,10 @@ function button(x, y, w, h, text)
 end
 
 function love.update(dt)
+    delayT = delayT + dt
+
     if state == STATES.EDIT then
-        if love.mouse.isDown(1) then
+        if love.mouse.isDown(1) and delayT > 0.2 then
             local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
             local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
             areas[currentArea]:setTile(gridX, gridY, selectedTile)
@@ -125,6 +189,16 @@ function love.update(dt)
             local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
             local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
             areas[currentArea]:setTile(gridX, gridY, nil)
+        end
+    elseif state == STATES.EDITCOLL then
+        if love.mouse.isDown(1) and delayT > 0.2 then
+            local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
+            local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
+            areas[currentArea]:setCollision(gridX, gridY, true)
+        elseif love.mouse.isDown(2) then
+            local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
+            local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
+            areas[currentArea]:setCollision(gridX, gridY, false)
         end
     elseif state == STATES.SELECT then
         if love.keyboard.isDown("w") then
@@ -174,7 +248,12 @@ function love.draw()
 
         if button(WIDTH / 2 - 50, HEIGHT - 40, 100, 30, "Edit") then
             state = STATES.EDIT
+            delayT = 0
             selectedTile = Tile(assets, 4, 4)
+        end
+
+        if button(WIDTH / 2 - 50, HEIGHT - 80, 100, 30, "Play") then
+            state = STATES.PLAY
         end
     elseif state == STATES.EDIT then
         areas[currentArea]:draw()
@@ -190,15 +269,54 @@ function love.draw()
 
         love.graphics.draw(assets, selectedTile.quad, gridX * CELL_SIZE, gridY * CELL_SIZE)
         love.graphics.setColor(1, 1, 1)
+    elseif state == STATES.EDITCOLL then
+        areas[currentArea]:draw()
+
+        for x = 1, WIDTH / CELL_SIZE do
+            for y = 1, HEIGHT / CELL_SIZE do
+                local coll = areas[currentArea].collision[x][y]
+                if coll then
+                    love.graphics.setColor(1, 0, 0, 0.5)
+                    love.graphics.rectangle("fill", (x - 1) * CELL_SIZE, (y - 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    love.graphics.setColor(1, 1, 1)
+                end
+            end
+        end
+
+        local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE)
+        local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE)
+
+        love.graphics.setColor(1, 0, 0, 0.5)
+        love.graphics.rectangle("fill", gridX * CELL_SIZE, gridY * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+        love.graphics.setColor(1, 1, 1)
+    elseif state == STATES.EDITMENU then
+        areas[currentArea]:draw()
+
+        if button(10, HEIGHT - 40, 60, 30, "Sprites") then
+            state = STATES.SELECT
+        end
+
+        if button(WIDTH - 70, HEIGHT - 40, 60, 30, "Collision") then
+            state = STATES.EDITCOLL
+            delayT = 0
+        end
     elseif state == STATES.SELECT then
         love.graphics.draw(assets, selectX, selectY)
 
         local sheetX = math.floor((scaler.mouse.getX() - selectX) / CELL_SIZE)
-        local sheetY = math.floor((scaler.mouse.getY() - selectY) / CELL_SIZE) -- this doesn't work
+        local sheetY = math.floor((scaler.mouse.getY() - selectY) / CELL_SIZE)
 
         love.graphics.setColor(1, 1, 1, 0.5)
         love.graphics.rectangle("line", selectX + sheetX * CELL_SIZE, selectY + sheetY * CELL_SIZE, CELL_SIZE, CELL_SIZE)
         love.graphics.setColor(1, 1, 1)
+    elseif state == STATES.PLAY then
+        areas[currentArea]:draw()
+
+        if (player.flip) then
+            love.graphics.draw(player.spritesheet, player.quad, (player.x) * CELL_SIZE, (player.y - 1) * CELL_SIZE, 0, -1, 1)
+        else
+            love.graphics.draw(player.spritesheet, player.quad, (player.x - 1) * CELL_SIZE, (player.y - 1) * CELL_SIZE)
+        end
     end
 
     local mouseX = scaler.mouse.getX()
@@ -229,10 +347,45 @@ function love.keypressed(key)
             state = STATES.AREAS
         elseif key == "e" then
             state = STATES.SELECT
+        elseif key == "space" then
+            state = STATES.EDITMENU
+        end
+    elseif state == STATES.EDITCOLL then
+        if key == "escape" then
+            state = STATES.EDITMENU
+        end
+    elseif state == STATES.EDITMENU then
+        if key == "space" then
+            state = STATES.EDIT
         end
     elseif state == STATES.SELECT then
-        if key == "e" then
+        if key == "escape" then
             state = STATES.EDIT
+            delayT = 0
+        end
+    elseif state == STATES.PLAY then
+        if key == "escape" then
+            state = STATES.AREAS
+        end
+
+        if key == "w" then
+            if player.y > 1 and areas[currentArea].collision[player.x][player.y - 1] == false then
+                player.y = player.y - 1
+            end
+        elseif key == "s" then
+            if player.y < HEIGHT / CELL_SIZE and areas[currentArea].collision[player.x][player.y + 1] == false then
+                player.y = player.y + 1
+            end
+        elseif key == "a" then
+            if player.x > 1 and areas[currentArea].collision[player.x - 1][player.y] == false then
+                player.x = player.x - 1
+            end
+            player.flip = false
+        elseif key == "d" then
+            if player.x < WIDTH / CELL_SIZE and areas[currentArea].collision[player.x + 1][player.y] == false then
+                player.x = player.x + 1
+            end
+            player.flip = true
         end
     end
 end
@@ -244,6 +397,9 @@ function love.mousepressed(x, y, button)
             local sheetY = math.floor((scaler.mouse.getY() - selectY) / CELL_SIZE)
             selectedTile = Tile(assets, sheetX, sheetY)
             state = STATES.EDIT
+            delayT = 0
+
+            print(sheetX, sheetY)
         end
     end
 end
