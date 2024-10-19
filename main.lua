@@ -16,6 +16,7 @@ local STATES = {
     SELECT = 5,
     PLAY = 6,
     COLORPICKER = 7,
+    SETTINGS = 8,
 }
 
 -- CLASSES
@@ -142,10 +143,14 @@ love.graphics.setFont(font)
 
 -- SETUP
 
+local spawnArea = 1
+local spawnX = 4
+local spawnY = 4
+
 local player = {
-    area = 1,
-    x = 2,
-    y = 2,
+    area = spawnArea,
+    x = spawnX,
+    y = spawnY,
     spritesheet = assets,
     quad = love.graphics.newQuad(18 * CELL_SIZE, 32 * CELL_SIZE, CELL_SIZE, CELL_SIZE, assets:getDimensions()),
     flip = false,
@@ -250,6 +255,20 @@ function love.draw()
     if state == STATES.AREAS then
         areas[currentArea]:draw()
 
+        for x = 1, WIDTH / CELL_SIZE do
+            for y = 1, HEIGHT / CELL_SIZE do
+                if x == spawnX and y == spawnY and currentArea == spawnArea then
+                    love.graphics.setColor(0, 0, 1, 0.5)
+                    love.graphics.rectangle("fill", (x - 1) * CELL_SIZE, (y - 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    love.graphics.setColor(1, 1, 1)
+                end
+            end
+        end
+
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.rectangle("fill", 0, 0, WIDTH, HEIGHT)
+        love.graphics.setColor(1, 1, 1)
+
         if editing then
             if math.floor(delayT * 2) % 2 == 0 then
                 love.graphics.rectangle("line", 10, 10, 200, 30, 4, 4)
@@ -287,11 +306,28 @@ function love.draw()
             selectedTile = Tile(assets, 4, 4)
         end
 
-        if button(WIDTH / 2 - 50, HEIGHT - 80, 100, 30, "Play") then
+        if button(WIDTH / 2 - 30, HEIGHT - 140, 60, 20, "Play") then
             state = STATES.PLAY
+            player.area = spawnArea
+            player.x = spawnX
+            player.y = spawnY
+        end
+
+        if button(WIDTH / 2 - 30, HEIGHT - 110, 60, 20, "Settings") then
+            state = STATES.SETTINGS
         end
     elseif state == STATES.EDIT then
         areas[currentArea]:draw()
+
+        for x = 1, WIDTH / CELL_SIZE do
+            for y = 1, HEIGHT / CELL_SIZE do
+                if x == spawnX and y == spawnY and currentArea == spawnArea then
+                    love.graphics.setColor(0, 0, 1, 0.5)
+                    love.graphics.rectangle("fill", (x - 1) * CELL_SIZE, (y - 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    love.graphics.setColor(1, 1, 1)
+                end
+            end
+        end
 
         local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE)
         local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE)
@@ -327,6 +363,16 @@ function love.draw()
     elseif state == STATES.EDITMENU then
         areas[currentArea]:draw()
 
+        for x = 1, WIDTH / CELL_SIZE do
+            for y = 1, HEIGHT / CELL_SIZE do
+                if x == spawnX and y == spawnY and currentArea == spawnArea then
+                    love.graphics.setColor(0, 0, 1, 0.5)
+                    love.graphics.rectangle("fill", (x - 1) * CELL_SIZE, (y - 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    love.graphics.setColor(1, 1, 1)
+                end
+            end
+        end
+
         love.graphics.print("Press SPACE to start editing", 10, 10)
 
         if button(10, HEIGHT - 40, 60, 30, "Sprites") then
@@ -353,7 +399,7 @@ function love.draw()
         love.graphics.rectangle("line", selectX + sheetX * CELL_SIZE, selectY + sheetY * CELL_SIZE, CELL_SIZE, CELL_SIZE)
         love.graphics.setColor(1, 1, 1)
     elseif state == STATES.PLAY then
-        areas[currentArea]:draw()
+        areas[player.area]:draw()
 
         if (player.flip) then
             love.graphics.draw(player.spritesheet, player.quad, (player.x) * CELL_SIZE, (player.y - 1) * CELL_SIZE, 0, -1, 1)
@@ -379,6 +425,14 @@ function love.draw()
         love.graphics.setColor(1, 1, 1)
 
         love.graphics.print("Press Enter to apply color, Esc to cancel", 10, 200)
+    elseif state == STATES.SETTINGS then
+        love.graphics.clear(0.5, 0.5, 0.5)
+
+        if button(10, 10, 100, 30, "Back") then
+            state = STATES.AREAS
+        end
+
+        -- change title and player sprite
     end
 
     local mouseX = scaler.mouse.getX()
@@ -436,20 +490,20 @@ function love.keypressed(key)
         end
 
         if key == "w" then
-            if player.y > 1 and areas[currentArea].collision[player.x][player.y - 1] == false then
+            if player.y > 1 and areas[player.area].collision[player.x][player.y - 1] == false then
                 player.y = player.y - 1
             end
         elseif key == "s" then
-            if player.y < HEIGHT / CELL_SIZE and areas[currentArea].collision[player.x][player.y + 1] == false then
+            if player.y < HEIGHT / CELL_SIZE and areas[player.area].collision[player.x][player.y + 1] == false then
                 player.y = player.y + 1
             end
         elseif key == "a" then
-            if player.x > 1 and areas[currentArea].collision[player.x - 1][player.y] == false then
+            if player.x > 1 and areas[player.area].collision[player.x - 1][player.y] == false then
                 player.x = player.x - 1
             end
             player.flip = false
         elseif key == "d" then
-            if player.x < WIDTH / CELL_SIZE and areas[currentArea].collision[player.x + 1][player.y] == false then
+            if player.x < WIDTH / CELL_SIZE and areas[player.area].collision[player.x + 1][player.y] == false then
                 player.x = player.x + 1
             end
             player.flip = true
@@ -474,6 +528,14 @@ function love.mousepressed(x, y, button)
             delayT = 0
 
             print(sheetX, sheetY)
+        end
+    elseif state == STATES.EDIT then
+        if button == 3 then
+            local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
+            local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
+            spawnArea = currentArea
+            spawnX = gridX
+            spawnY = gridY
         end
     end
 end
