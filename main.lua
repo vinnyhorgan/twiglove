@@ -50,9 +50,10 @@ end
 
 function Dialogue:parse(script)
     local segments = {}
-
     local i = 1
+
     while i <= #script do
+        -- Find all the tags and their end positions
         local wvyStart, wvyEnd = script:find("{wvy}", i)
         local shkStart, shkEnd = script:find("{shk}", i)
         local rbwStart, rbwEnd = script:find("{rbw}", i)
@@ -60,27 +61,31 @@ function Dialogue:parse(script)
         local shkCloseStart, shkCloseEnd = script:find("{/shk}", i)
         local rbwCloseStart, rbwCloseEnd = script:find("{/rbw}", i)
 
-        if wvyStart and wvyCloseStart then
-            if wvyStart > i then
-                table.insert(segments, {type = "normal", content = script:sub(i, wvyStart - 1)})
-            end
-            table.insert(segments, {type = "wavy", content = script:sub(wvyEnd + 1, wvyCloseStart - 1)})
-            i = wvyCloseEnd + 1
-        elseif shkStart and shkCloseStart then
-            if shkStart > i then
-                table.insert(segments, {type = "normal", content = script:sub(i, shkStart - 1)})
-            end
+        -- Handle shaky text
+        if shkStart and shkCloseStart and shkStart == i then
             table.insert(segments, {type = "shaky", content = script:sub(shkEnd + 1, shkCloseStart - 1)})
             i = shkCloseEnd + 1
-        elseif rbwStart and rbwCloseStart then
-            if rbwStart > i then
-                table.insert(segments, {type = "normal", content = script:sub(i, rbwStart - 1)})
-            end
+        -- Handle rainbow text
+        elseif rbwStart and rbwCloseStart and rbwStart == i then
             table.insert(segments, {type = "rainbow", content = script:sub(rbwEnd + 1, rbwCloseStart - 1)})
             i = rbwCloseEnd + 1
+        -- Handle wavy text
+        elseif wvyStart and wvyCloseStart and wvyStart == i then
+            table.insert(segments, {type = "wavy", content = script:sub(wvyEnd + 1, wvyCloseStart - 1)})
+            i = wvyCloseEnd + 1
         else
-            table.insert(segments, {type = "normal", content = script:sub(i)})
-            break
+            -- Find the next tag or just add normal text until the next tag
+            local nextTagStart = math.min(
+                wvyStart or #script + 1,
+                shkStart or #script + 1,
+                rbwStart or #script + 1
+            )
+            if nextTagStart > i then
+                table.insert(segments, {type = "normal", content = script:sub(i, nextTagStart - 1)})
+                i = nextTagStart
+            else
+                break
+            end
         end
     end
 
@@ -242,7 +247,7 @@ local areas = {
 }
 
 local entities = {
-    Entity(assets, 18, 27, Dialogue("{shk}HELLOO{/shk} how are {rbw}YOU{/rbw}??")),
+    Entity(assets, 18, 27, Dialogue("{shk}HELLO{/shk} {rbw}DUDE{/rbw} {wvy}HOW ARE YOU??{/wvy}")),
 }
 
 local currentArea = 1
