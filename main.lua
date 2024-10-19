@@ -17,6 +17,10 @@ local STATES = {
     PLAY = 6,
     COLORPICKER = 7,
     SETTINGS = 8,
+    ENTITIES = 9,
+    DIALOGUEEDITOR = 10,
+    ENTITYSELECT = 11,
+    DIALOGUE = 12,
 }
 
 -- CLASSES
@@ -30,8 +34,9 @@ end
 
 local Entity = Tile:extend()
 
-function Entity:new(spritesheet, sheetX, sheetY)
+function Entity:new(spritesheet, sheetX, sheetY, dialogue)
     Entity.super.new(self, spritesheet, sheetX, sheetY)
+    self.dialogue = dialogue
 end
 
 local Area = Object:extend()
@@ -108,29 +113,6 @@ function Area:draw()
     end
 end
 
--- GLOBALS
-
-local areas = {
-    Area("Test Area"),
-}
-
-local currentArea = 1
-local state = STATES.AREAS
-local newAreaId = 1
-
-local prevMouseState = {false, false, false}
-
-local selectedTile = nil
-local selectX = 0
-local selectY = 0
-
-local delayT = 0
-
-local selectedColor = {1, 1, 1}
-
-local editing = false
-local editbuffer = ""
-
 -- ASSETS
 
 local assets = scaler.newImage("roguelike.png")
@@ -141,7 +123,36 @@ love.mouse.setVisible(false)
 local font = love.graphics.newFont(10, "mono")
 love.graphics.setFont(font)
 
--- SETUP
+-- GLOBALS
+
+local areas = {
+    Area("Test Area"),
+}
+
+local entities = {
+    Entity(assets, 18, 27, "Hello I'm dogggo"),
+}
+
+local currentArea = 1
+local currentEntity = 1
+
+local state = STATES.AREAS
+local newAreaId = 1
+
+local prevMouseState = {false, false, false}
+
+local selectedTile = nil
+local selectX = 0
+local selectY = 0
+
+local selectedEntity = nil
+
+local delayT = 0
+
+local selectedColor = {1, 1, 1}
+
+local editing = false
+local editbuffer = ""
 
 local spawnArea = 1
 local spawnX = 4
@@ -155,6 +166,10 @@ local player = {
     quad = love.graphics.newQuad(18 * CELL_SIZE, 32 * CELL_SIZE, CELL_SIZE, CELL_SIZE, assets:getDimensions()),
     flip = false,
 }
+
+local interactingEntity = nil
+
+-- SETUP
 
 love.keyboard.setKeyRepeat(true)
 
@@ -212,9 +227,18 @@ function love.update(dt)
 
     if state == STATES.EDIT then
         if love.mouse.isDown(1) and delayT > 0.2 then
-            local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
-            local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
-            areas[currentArea]:setTile(gridX, gridY, selectedTile)
+            if selectedEntity then
+                local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
+                local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
+                areas[currentArea]:setEntity(gridX, gridY, selectedEntity)
+
+                delayT = 0
+                selectedEntity = nil
+            else
+                local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
+                local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
+                areas[currentArea]:setTile(gridX, gridY, selectedTile)
+            end
         elseif love.mouse.isDown(2) then
             local gridX = math.floor(scaler.mouse.getX() / CELL_SIZE) + 1
             local gridY = math.floor(scaler.mouse.getY() / CELL_SIZE) + 1
@@ -306,14 +330,18 @@ function love.draw()
             selectedTile = Tile(assets, 4, 4)
         end
 
-        if button(WIDTH / 2 - 30, HEIGHT - 140, 60, 20, "Play") then
+        if button(WIDTH / 2 - 30, HEIGHT - 160, 60, 20, "Play") then
             state = STATES.PLAY
             player.area = spawnArea
             player.x = spawnX
             player.y = spawnY
         end
 
-        if button(WIDTH / 2 - 30, HEIGHT - 110, 60, 20, "Settings") then
+        if button(WIDTH / 2 - 30, HEIGHT - 130, 60, 20, "Entities") then
+            state = STATES.ENTITIES
+        end
+
+        if button(WIDTH / 2 - 30, HEIGHT - 100, 60, 20, "Settings") then
             state = STATES.SETTINGS
         end
     elseif state == STATES.EDIT then
@@ -338,7 +366,12 @@ function love.draw()
             love.graphics.setColor(1, 1, 1, 0.5)
         end
 
-        love.graphics.draw(assets, selectedTile.quad, gridX * CELL_SIZE, gridY * CELL_SIZE)
+        if selectedEntity then
+            love.graphics.draw(assets, selectedEntity.quad, gridX * CELL_SIZE, gridY * CELL_SIZE)
+        else
+            love.graphics.draw(assets, selectedTile.quad, gridX * CELL_SIZE, gridY * CELL_SIZE)
+        end
+
         love.graphics.setColor(1, 1, 1)
     elseif state == STATES.EDITCOLL then
         areas[currentArea]:draw()
@@ -387,6 +420,10 @@ function love.draw()
         if button(WIDTH / 2 - 50, HEIGHT - 40, 100, 30, "Background") then
             state = STATES.COLORPICKER
         end
+
+        if button(WIDTH / 2 - 50, HEIGHT - 80, 100, 30, "Entities") then
+            state = STATES.ENTITYSELECT
+        end
     elseif state == STATES.SELECT then
         love.graphics.clear(areas[currentArea].background[1], areas[currentArea].background[2], areas[currentArea].background[3])
 
@@ -405,6 +442,26 @@ function love.draw()
             love.graphics.draw(player.spritesheet, player.quad, (player.x) * CELL_SIZE, (player.y - 1) * CELL_SIZE, 0, -1, 1)
         else
             love.graphics.draw(player.spritesheet, player.quad, (player.x - 1) * CELL_SIZE, (player.y - 1) * CELL_SIZE)
+        end
+    elseif state == STATES.DIALOGUE then
+        areas[player.area]:draw()
+
+        if (player.flip) then
+            love.graphics.draw(player.spritesheet, player.quad, (player.x) * CELL_SIZE, (player.y - 1) * CELL_SIZE, 0, -1, 1)
+        else
+            love.graphics.draw(player.spritesheet, player.quad, (player.x - 1) * CELL_SIZE, (player.y - 1) * CELL_SIZE)
+        end
+
+        -- dialogue box
+        love.graphics.setColor(0, 0, 0, 0.5)
+        love.graphics.rectangle("fill", 10, HEIGHT - 100, WIDTH - 20, 90)
+        love.graphics.setColor(1, 1, 1)
+
+        love.graphics.print(interactingEntity.dialogue, 20, HEIGHT - 90)
+
+        if love.keyboard.isDown("space") then
+            state = STATES.PLAY
+            interactingEntity = nil
         end
     elseif state == STATES.COLORPICKER then
         love.graphics.clear(0.5, 0.5, 0.5)
@@ -428,11 +485,50 @@ function love.draw()
     elseif state == STATES.SETTINGS then
         love.graphics.clear(0.5, 0.5, 0.5)
 
-        if button(10, 10, 100, 30, "Back") then
-            state = STATES.AREAS
-        end
+        love.graphics.print("Settings", 10, 10)
 
         -- change title and player sprite
+    elseif state == STATES.ENTITIES then
+        love.graphics.clear(0.5, 0.5, 0.5)
+
+        love.graphics.print("Entities", 10, 10)
+
+        love.graphics.draw(assets, entities[currentEntity].quad, WIDTH / 2 - CELL_SIZE * 3 / 2, HEIGHT / 2 - CELL_SIZE * 3 / 2, 0, 3, 3)
+
+        if button(WIDTH - 40, 10, 30, 30, "+") then
+            table.insert(entities, Entity(assets, 4, 4, "Hello!"))
+            currentEntity = #entities
+        end
+
+        if button(10, HEIGHT / 2 - 15, 30, 30, "<") then
+            currentEntity = currentEntity - 1
+            if currentEntity < 1 then
+                currentEntity = #entities
+            end
+        end
+
+        if button(WIDTH - 40, HEIGHT / 2 - 15, 30, 30, ">") then
+            currentEntity = currentEntity + 1
+            if currentEntity > #entities then
+                currentEntity = 1
+            end
+        end
+
+        if button(WIDTH / 2 - 50, HEIGHT - 40, 100, 30, "Dialogue") then
+            state = STATES.DIALOGUEEDITOR
+        end
+    elseif state == STATES.ENTITYSELECT then
+        love.graphics.clear(0.5, 0.5, 0.5)
+
+        for i, entity in ipairs(entities) do
+            love.graphics.draw(assets, entity.quad, 10 + (i - 1) * 40, 10, 0, 2, 2)
+
+            if button(10 + (i - 1) * 40, 10, 30, 30, "") then
+                selectedEntity = entity
+                state = STATES.EDIT
+                delayT = 0
+            end
+        end
     end
 
     local mouseX = scaler.mouse.getX()
@@ -490,29 +586,61 @@ function love.keypressed(key)
         end
 
         if key == "w" then
-            if player.y > 1 and areas[player.area].collision[player.x][player.y - 1] == false then
+            if player.y > 1 and areas[player.area].collision[player.x][player.y - 1] == false and areas[player.area].entities[player.x][player.y - 1] == nil then
                 player.y = player.y - 1
             end
         elseif key == "s" then
-            if player.y < HEIGHT / CELL_SIZE and areas[player.area].collision[player.x][player.y + 1] == false then
+            if player.y < HEIGHT / CELL_SIZE and areas[player.area].collision[player.x][player.y + 1] == false and areas[player.area].entities[player.x][player.y + 1] == nil then
                 player.y = player.y + 1
             end
         elseif key == "a" then
-            if player.x > 1 and areas[player.area].collision[player.x - 1][player.y] == false then
+            if player.x > 1 and areas[player.area].collision[player.x - 1][player.y] == false and areas[player.area].entities[player.x - 1][player.y] == nil then
                 player.x = player.x - 1
             end
             player.flip = false
         elseif key == "d" then
-            if player.x < WIDTH / CELL_SIZE and areas[player.area].collision[player.x + 1][player.y] == false then
+            if player.x < WIDTH / CELL_SIZE and areas[player.area].collision[player.x + 1][player.y] == false and areas[player.area].entities[player.x + 1][player.y] == nil then
                 player.x = player.x + 1
             end
             player.flip = true
+        end
+
+        if key == "e" then
+            if player.x > 1 and areas[player.area].entities[player.x - 1][player.y] then
+                state = STATES.DIALOGUE
+                interactingEntity = areas[player.area].entities[player.x - 1][player.y]
+            elseif player.x < WIDTH / CELL_SIZE and areas[player.area].entities[player.x + 1][player.y] then
+                state = STATES.DIALOGUE
+                interactingEntity = areas[player.area].entities[player.x + 1][player.y]
+            elseif player.y > 1 and areas[player.area].entities[player.x][player.y - 1] then
+                state = STATES.DIALOGUE
+                interactingEntity = areas[player.area].entities[player.x][player.y - 1]
+            elseif player.y < HEIGHT / CELL_SIZE and areas[player.area].entities[player.x][player.y + 1] then
+                state = STATES.DIALOGUE
+                interactingEntity = areas[player.area].entities[player.x][player.y + 1]
+            end
         end
     elseif state == STATES.COLORPICKER then
         if key == "return" then
             areas[currentArea].background = {selectedColor[1], selectedColor[2], selectedColor[3]}
             state = STATES.EDITMENU
         elseif key == "escape" then
+            state = STATES.EDITMENU
+        end
+    elseif state == STATES.SETTINGS then
+        if key == "escape" then
+            state = STATES.AREAS
+        end
+    elseif state == STATES.ENTITIES then
+        if key == "escape" then
+            state = STATES.AREAS
+        end
+    elseif state == STATES.DIALOGUEEDITOR then
+        if key == "escape" then
+            state = STATES.ENTITIES
+        end
+    elseif state == STATES.ENTITYSELECT then
+        if key == "escape" then
             state = STATES.EDITMENU
         end
     end
