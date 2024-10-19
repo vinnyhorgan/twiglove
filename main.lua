@@ -23,7 +23,84 @@ local STATES = {
     DIALOGUE = 12,
 }
 
+-- ASSETS
+
+local assets = scaler.newImage("roguelike.png")
+
+local cursor = scaler.newImage("cursor.png")
+love.mouse.setVisible(false)
+
+local font = love.graphics.newFont(10, "mono")
+love.graphics.setFont(font)
+
 -- CLASSES
+
+local Dialogue = Object:extend()
+
+function Dialogue:new(script)
+    self.script = script
+    self.segments = self:parse(script)
+
+    for _, segment in ipairs(self.segments) do
+        if segment.type == "wavy" then
+            segment.timeOffset = math.random() * 20
+        end
+    end
+end
+
+function Dialogue:parse(script)
+    local segments = {}
+
+    local i = 1
+    while i <= #script do
+        local wvyStart, wvyEnd = script:find("{wvy}", i)
+        local wvyCloseStart, wvyCloseEnd = script:find("{/wvy}", i)
+
+        if wvyStart and wvyCloseStart then
+            if wvyStart > i then
+                table.insert(segments, {type = "normal", content = script:sub(i, wvyStart - 1)})
+            end
+
+            table.insert(segments, {type = "wavy", content = script:sub(wvyEnd + 1, wvyCloseStart - 1)})
+
+            i = wvyCloseEnd + 1
+        else
+            table.insert(segments, {type = "normal", content = script:sub(i)})
+            break
+        end
+    end
+
+    return segments
+end
+
+function Dialogue:drawWavy(text, x, y, timeOffset)
+    local freq = 4
+    local amp = 4
+
+    for i = 1, #text do
+        local char = text:sub(i, i)
+        local charX = x + font:getWidth(text:sub(1, i - 1))
+        local offsetY = math.sin((love.timer.getTime() * freq) + timeOffset + (i * 0.5)) * amp
+        love.graphics.print(char, charX, y + offsetY)
+    end
+end
+
+function Dialogue:draw()
+    love.graphics.setColor(0, 0, 0, 0.5)
+    love.graphics.rectangle("fill", 0, HEIGHT - 80, WIDTH, 80)
+    love.graphics.setColor(1, 1, 1)
+
+    local currentX = 10
+    for _, segment in ipairs(self.segments) do
+        if segment.type == "normal" then
+            love.graphics.print(segment.content, currentX, HEIGHT - 70)
+            currentX = currentX + font:getWidth(segment.content)
+        elseif segment.type == "wavy" then
+            self:drawWavy(segment.content, currentX, HEIGHT - 70, segment.timeOffset)
+            currentX = currentX + font:getWidth(segment.content)
+        end
+    end
+end
 
 local Tile = Object:extend()
 
@@ -113,16 +190,6 @@ function Area:draw()
     end
 end
 
--- ASSETS
-
-local assets = scaler.newImage("roguelike.png")
-
-local cursor = scaler.newImage("cursor.png")
-love.mouse.setVisible(false)
-
-local font = love.graphics.newFont(10, "mono")
-love.graphics.setFont(font)
-
 -- GLOBALS
 
 local areas = {
@@ -130,7 +197,7 @@ local areas = {
 }
 
 local entities = {
-    Entity(assets, 18, 27, "Hello I'm dogggo"),
+    Entity(assets, 18, 27, Dialogue("Hello I'm a {wvy}cool{/wvy} doggo. You are {wvy}not{/wvy} cool.")),
 }
 
 local currentArea = 1
@@ -170,6 +237,8 @@ local player = {
 local interactingEntity = nil
 
 -- SETUP
+
+areas[currentArea]:setEntity(6, 4, entities[1]) -- test
 
 love.keyboard.setKeyRepeat(true)
 
@@ -452,12 +521,7 @@ function love.draw()
             love.graphics.draw(player.spritesheet, player.quad, (player.x - 1) * CELL_SIZE, (player.y - 1) * CELL_SIZE)
         end
 
-        -- dialogue box
-        love.graphics.setColor(0, 0, 0, 0.5)
-        love.graphics.rectangle("fill", 10, HEIGHT - 100, WIDTH - 20, 90)
-        love.graphics.setColor(1, 1, 1)
-
-        love.graphics.print(interactingEntity.dialogue, 20, HEIGHT - 90)
+        interactingEntity.dialogue:draw()
 
         if love.keyboard.isDown("space") then
             state = STATES.PLAY
@@ -496,7 +560,7 @@ function love.draw()
         love.graphics.draw(assets, entities[currentEntity].quad, WIDTH / 2 - CELL_SIZE * 3 / 2, HEIGHT / 2 - CELL_SIZE * 3 / 2, 0, 3, 3)
 
         if button(WIDTH - 40, 10, 30, 30, "+") then
-            table.insert(entities, Entity(assets, 4, 4, "Hello!"))
+            table.insert(entities, Entity(assets, 4, 4, Dialogue("Hello!")))
             currentEntity = #entities
         end
 
