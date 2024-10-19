@@ -42,7 +42,7 @@ function Dialogue:new(script)
     self.segments = self:parse(script)
 
     for _, segment in ipairs(self.segments) do
-        if segment.type == "wavy" then
+        if segment.type == "wavy" or segment.type == "shaky" then
             segment.timeOffset = math.random() * 20
         end
     end
@@ -54,16 +54,30 @@ function Dialogue:parse(script)
     local i = 1
     while i <= #script do
         local wvyStart, wvyEnd = script:find("{wvy}", i)
+        local shkStart, shkEnd = script:find("{shk}", i)
+        local rbwStart, rbwEnd = script:find("{rbw}", i)
         local wvyCloseStart, wvyCloseEnd = script:find("{/wvy}", i)
+        local shkCloseStart, shkCloseEnd = script:find("{/shk}", i)
+        local rbwCloseStart, rbwCloseEnd = script:find("{/rbw}", i)
 
         if wvyStart and wvyCloseStart then
             if wvyStart > i then
                 table.insert(segments, {type = "normal", content = script:sub(i, wvyStart - 1)})
             end
-
             table.insert(segments, {type = "wavy", content = script:sub(wvyEnd + 1, wvyCloseStart - 1)})
-
             i = wvyCloseEnd + 1
+        elseif shkStart and shkCloseStart then
+            if shkStart > i then
+                table.insert(segments, {type = "normal", content = script:sub(i, shkStart - 1)})
+            end
+            table.insert(segments, {type = "shaky", content = script:sub(shkEnd + 1, shkCloseStart - 1)})
+            i = shkCloseEnd + 1
+        elseif rbwStart and rbwCloseStart then
+            if rbwStart > i then
+                table.insert(segments, {type = "normal", content = script:sub(i, rbwStart - 1)})
+            end
+            table.insert(segments, {type = "rainbow", content = script:sub(rbwEnd + 1, rbwCloseStart - 1)})
+            i = rbwCloseEnd + 1
         else
             table.insert(segments, {type = "normal", content = script:sub(i)})
             break
@@ -85,6 +99,31 @@ function Dialogue:drawWavy(text, x, y, timeOffset)
     end
 end
 
+function Dialogue:drawShaky(text, x, y)
+    for i = 1, #text do
+        local char = text:sub(i, i)
+        local charX = x + font:getWidth(text:sub(1, i - 1))
+        local offsetX = math.random(-1, 1)
+        local offsetY = math.random(-1, 1)
+        love.graphics.print(char, charX + offsetX, y + offsetY)
+    end
+end
+
+function Dialogue:drawRainbow(text, x, y)
+    for i = 1, #text do
+        local char = text:sub(i, i)
+        local charX = x + font:getWidth(text:sub(1, i - 1))
+
+        local r = math.sin(i * 0.3 + love.timer.getTime() * 5) * 0.5 + 0.5
+        local g = math.sin(i * 0.3 + love.timer.getTime() * 5 + (2 * math.pi / 3)) * 0.5 + 0.5
+        local b = math.sin(i * 0.3 + love.timer.getTime() * 5 + (4 * math.pi / 3)) * 0.5 + 0.5
+
+        love.graphics.setColor(r, g, b)
+        love.graphics.print(char, charX, y)
+    end
+    love.graphics.setColor(1, 1, 1)
+end
+
 function Dialogue:draw()
     love.graphics.setColor(0, 0, 0, 0.5)
     love.graphics.rectangle("fill", 0, HEIGHT - 80, WIDTH, 80)
@@ -97,6 +136,12 @@ function Dialogue:draw()
             currentX = currentX + font:getWidth(segment.content)
         elseif segment.type == "wavy" then
             self:drawWavy(segment.content, currentX, HEIGHT - 70, segment.timeOffset)
+            currentX = currentX + font:getWidth(segment.content)
+        elseif segment.type == "shaky" then
+            self:drawShaky(segment.content, currentX, HEIGHT - 70)
+            currentX = currentX + font:getWidth(segment.content)
+        elseif segment.type == "rainbow" then
+            self:drawRainbow(segment.content, currentX, HEIGHT - 70)
             currentX = currentX + font:getWidth(segment.content)
         end
     end
@@ -197,7 +242,7 @@ local areas = {
 }
 
 local entities = {
-    Entity(assets, 18, 27, Dialogue("Hello I'm a {wvy}cool{/wvy} doggo. You are {wvy}not{/wvy} cool.")),
+    Entity(assets, 18, 27, Dialogue("{shk}HELLOO{/shk} how are {rbw}YOU{/rbw}??")),
 }
 
 local currentArea = 1
@@ -593,6 +638,21 @@ function love.draw()
                 delayT = 0
             end
         end
+    elseif state == STATES.DIALOGUEEDITOR then
+        love.graphics.clear(0.5, 0.5, 0.5)
+
+        love.graphics.print("Dialogue Editor", 10, 10)
+
+        love.graphics.print("Entity: " .. currentEntity, 10, 40)
+
+        love.graphics.print("Script: ", 10, 70)
+
+        love.graphics.print(entities[currentEntity].dialogue.script, 10, 100)
+
+        if button(WIDTH - 50, 10, 40, 30, "Save") then
+            entities[currentEntity].dialogue = Dialogue(entities[currentEntity].dialogue.script)
+            state = STATES.ENTITIES
+        end
     end
 
     local mouseX = scaler.mouse.getX()
@@ -702,6 +762,12 @@ function love.keypressed(key)
     elseif state == STATES.DIALOGUEEDITOR then
         if key == "escape" then
             state = STATES.ENTITIES
+        elseif key == "backspace" then
+            local byteoffset = utf8.offset(entities[currentEntity].dialogue.script, -1)
+
+            if byteoffset then
+                entities[currentEntity].dialogue.script = string.sub(entities[currentEntity].dialogue.script, 1, byteoffset - 1)
+            end
         end
     elseif state == STATES.ENTITYSELECT then
         if key == "escape" then
@@ -737,6 +803,8 @@ function love.textinput(text)
         if editing and font:getWidth(editbuffer .. text) < 180 then
             editbuffer = editbuffer .. text
         end
+    elseif state == STATES.DIALOGUEEDITOR then
+        entities[currentEntity].dialogue.script = entities[currentEntity].dialogue.script .. text
     end
 end
 
