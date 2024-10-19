@@ -40,11 +40,16 @@ local Dialogue = Object:extend()
 function Dialogue:new(script)
     self.script = script
     self.segments = self:parse(script)
+    self.currentIndices = {}  -- To track how many letters have been revealed for each segment
+    self.timeElapsed = 0       -- To track time elapsed for letter revealing
+    self.revealDelay = 0.05     -- Time in seconds to wait before revealing the next letter
 
     for _, segment in ipairs(self.segments) do
         if segment.type == "wavy" or segment.type == "shaky" then
             segment.timeOffset = math.random() * 20
         end
+        -- Initialize currentIndex for each segment
+        table.insert(self.currentIndices, 0)
     end
 end
 
@@ -53,7 +58,6 @@ function Dialogue:parse(script)
     local i = 1
 
     while i <= #script do
-        -- Find all the tags and their end positions
         local wvyStart, wvyEnd = script:find("{wvy}", i)
         local shkStart, shkEnd = script:find("{shk}", i)
         local rbwStart, rbwEnd = script:find("{rbw}", i)
@@ -61,20 +65,16 @@ function Dialogue:parse(script)
         local shkCloseStart, shkCloseEnd = script:find("{/shk}", i)
         local rbwCloseStart, rbwCloseEnd = script:find("{/rbw}", i)
 
-        -- Handle shaky text
         if shkStart and shkCloseStart and shkStart == i then
             table.insert(segments, {type = "shaky", content = script:sub(shkEnd + 1, shkCloseStart - 1)})
             i = shkCloseEnd + 1
-        -- Handle rainbow text
         elseif rbwStart and rbwCloseStart and rbwStart == i then
             table.insert(segments, {type = "rainbow", content = script:sub(rbwEnd + 1, rbwCloseStart - 1)})
             i = rbwCloseEnd + 1
-        -- Handle wavy text
         elseif wvyStart and wvyCloseStart and wvyStart == i then
             table.insert(segments, {type = "wavy", content = script:sub(wvyEnd + 1, wvyCloseStart - 1)})
             i = wvyCloseEnd + 1
         else
-            -- Find the next tag or just add normal text until the next tag
             local nextTagStart = math.min(
                 wvyStart or #script + 1,
                 shkStart or #script + 1,
@@ -129,26 +129,34 @@ function Dialogue:drawRainbow(text, x, y)
     love.graphics.setColor(1, 1, 1)
 end
 
+function Dialogue:update(dt)
+    self.timeElapsed = self.timeElapsed + dt
+    for i, segment in ipairs(self.segments) do
+        if self.currentIndices[i] < #segment.content and self.timeElapsed >= self.revealDelay then
+            self.currentIndices[i] = self.currentIndices[i] + 1
+            self.timeElapsed = 0 -- Reset the timer after revealing a letter
+        end
+    end
+end
+
 function Dialogue:draw()
     love.graphics.setColor(0, 0, 0, 0.5)
     love.graphics.rectangle("fill", 0, HEIGHT - 80, WIDTH, 80)
     love.graphics.setColor(1, 1, 1)
 
     local currentX = 10
-    for _, segment in ipairs(self.segments) do
+    for i, segment in ipairs(self.segments) do
+        local displayedText = segment.content:sub(1, self.currentIndices[i])
         if segment.type == "normal" then
-            love.graphics.print(segment.content, currentX, HEIGHT - 70)
-            currentX = currentX + font:getWidth(segment.content)
+            love.graphics.print(displayedText, currentX, HEIGHT - 70)
         elseif segment.type == "wavy" then
-            self:drawWavy(segment.content, currentX, HEIGHT - 70, segment.timeOffset)
-            currentX = currentX + font:getWidth(segment.content)
+            self:drawWavy(displayedText, currentX, HEIGHT - 70, segment.timeOffset)
         elseif segment.type == "shaky" then
-            self:drawShaky(segment.content, currentX, HEIGHT - 70)
-            currentX = currentX + font:getWidth(segment.content)
+            self:drawShaky(displayedText, currentX, HEIGHT - 70)
         elseif segment.type == "rainbow" then
-            self:drawRainbow(segment.content, currentX, HEIGHT - 70)
-            currentX = currentX + font:getWidth(segment.content)
+            self:drawRainbow(displayedText, currentX, HEIGHT - 70)
         end
+        currentX = currentX + font:getWidth(displayedText)
     end
 end
 
@@ -247,7 +255,7 @@ local areas = {
 }
 
 local entities = {
-    Entity(assets, 18, 27, Dialogue("{shk}HELLO{/shk} {rbw}DUDE{/rbw} {wvy}HOW ARE YOU??{/wvy}")),
+    Entity(assets, 18, 27, Dialogue("Hello dude!!! I wanted to know {wvy}How are you?{/wvy}")),
 }
 
 local currentArea = 1
@@ -389,6 +397,8 @@ function love.update(dt)
         selectedColor[1] = slider(50, 50, selectedColor[1], 1)
         selectedColor[2] = slider(50, 80, selectedColor[2], 1)
         selectedColor[3] = slider(50, 110, selectedColor[3], 1)
+    elseif state == STATES.DIALOGUE then
+        interactingEntity.dialogue:update(dt)
     end
 end
 
