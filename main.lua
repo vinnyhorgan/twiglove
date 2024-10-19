@@ -1,3 +1,5 @@
+local utf8 = require("utf8")
+
 local Object = require("classic")
 local scaler = require("scaler")
 
@@ -108,8 +110,7 @@ end
 -- GLOBALS
 
 local areas = {
-    Area("Test Area 1"),
-    Area("Test Area 2"),
+    Area("Test Area"),
 }
 
 local currentArea = 1
@@ -125,6 +126,9 @@ local selectY = 0
 local delayT = 0
 
 local selectedColor = {1, 1, 1}
+
+local editing = false
+local editbuffer = ""
 
 -- ASSETS
 
@@ -150,9 +154,6 @@ local player = {
 love.keyboard.setKeyRepeat(true)
 
 scaler.setup(WIDTH, HEIGHT)
-
-areas[1]:setTile(1, 1, Tile(assets, 5, 5))
-areas[1]:setTile(5, 5, Tile(assets, 5, 5))
 
 local function mousepressed(button)
     local state = love.mouse.isDown(button)
@@ -249,7 +250,15 @@ function love.draw()
     if state == STATES.AREAS then
         areas[currentArea]:draw()
 
-        if button(10, 10, 200, 30, areas[currentArea].name) then
+        if editing then
+            if math.floor(delayT * 2) % 2 == 0 then
+                love.graphics.rectangle("line", 10, 10, 200, 30, 4, 4)
+            end
+            love.graphics.print(editbuffer, 10 + 200 / 2 - math.floor(font:getWidth(editbuffer) / 2), 10 + 30 / 2 - math.floor(font:getHeight() / 2))
+        else
+            if button(10, 10, 200, 30, areas[currentArea].name) then
+                editing = true
+            end
         end
 
         if button(WIDTH - 40, 10, 30, 30, "+") then
@@ -384,21 +393,24 @@ end
 
 function love.keypressed(key)
     if state == STATES.AREAS then
-        if key == "a" then
-            currentArea = currentArea - 1
-            if currentArea < 1 then
-                currentArea = #areas
-            end
-        elseif key == "d" then
-            currentArea = currentArea + 1
-            if currentArea > #areas then
-                currentArea = 1
+        if editing then
+            if key == "return" then
+                areas[currentArea].name = editbuffer
+                editing = false
+                editbuffer = ""
+            elseif key == "escape" then
+                editing = false
+                editbuffer = ""
+            elseif key == "backspace" then
+                local byteoffset = utf8.offset(editbuffer, -1)
+
+                if byteoffset then
+                    editbuffer = string.sub(editbuffer, 1, byteoffset - 1)
+                end
             end
         end
     elseif state == STATES.EDIT then
-        if key == "escape" then
-            state = STATES.AREAS
-        elseif key == "e" then
+        if key == "e" then
             state = STATES.SELECT
         elseif key == "space" then
             state = STATES.EDITMENU
@@ -410,15 +422,17 @@ function love.keypressed(key)
     elseif state == STATES.EDITMENU then
         if key == "space" then
             state = STATES.EDIT
+        elseif key == "escape" then
+            state = STATES.AREAS
         end
     elseif state == STATES.SELECT then
         if key == "escape" then
-            state = STATES.EDIT
-            delayT = 0
+            state = STATES.EDITMENU
         end
     elseif state == STATES.PLAY then
         if key == "escape" then
             state = STATES.AREAS
+            editing = false
         end
 
         if key == "w" then
@@ -444,6 +458,8 @@ function love.keypressed(key)
         if key == "return" then
             areas[currentArea].background = {selectedColor[1], selectedColor[2], selectedColor[3]}
             state = STATES.EDITMENU
+        elseif key == "escape" then
+            state = STATES.EDITMENU
         end
     end
 end
@@ -458,6 +474,14 @@ function love.mousepressed(x, y, button)
             delayT = 0
 
             print(sheetX, sheetY)
+        end
+    end
+end
+
+function love.textinput(text)
+    if state == STATES.AREAS then
+        if editing and font:getWidth(editbuffer .. text) < 180 then
+            editbuffer = editbuffer .. text
         end
     end
 end
