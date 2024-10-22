@@ -42,7 +42,8 @@ function Dialogue:new(script)
     self.segments = self:parse(script)
     self.currentIndices = {}  -- To track how many letters have been revealed for each segment
     self.timeElapsed = 0       -- To track time elapsed for letter revealing
-    self.revealDelay = 0.05     -- Time in seconds to wait before revealing the next letter
+    self.revealDelay = 0.05    -- Time in seconds to wait before revealing the next letter
+    self.maxWidth = WIDTH - 20  -- Max width for text (20 pixels padding)
 
     for _, segment in ipairs(self.segments) do
         if segment.type == "wavy" or segment.type == "shaky" then
@@ -90,6 +91,30 @@ function Dialogue:parse(script)
     end
 
     return segments
+end
+
+-- Function to wrap text
+function Dialogue:wrapText(text)
+    local wrappedLines = {}
+    local currentLine = ""
+
+    for word in text:gmatch("%S+") do
+        local testLine = currentLine .. (currentLine ~= "" and " " or "") .. word
+        local testWidth = font:getWidth(testLine)
+
+        if testWidth > self.maxWidth then
+            table.insert(wrappedLines, currentLine)
+            currentLine = word
+        else
+            currentLine = testLine
+        end
+    end
+
+    if currentLine ~= "" then
+        table.insert(wrappedLines, currentLine)
+    end
+
+    return wrappedLines
 end
 
 function Dialogue:drawWavy(text, x, y, timeOffset)
@@ -144,19 +169,22 @@ function Dialogue:draw()
     love.graphics.rectangle("fill", 0, HEIGHT - 80, WIDTH, 80)
     love.graphics.setColor(1, 1, 1)
 
-    local currentX = 10
+    local currentY = HEIGHT - 70
     for i, segment in ipairs(self.segments) do
         local displayedText = segment.content:sub(1, self.currentIndices[i])
-        if segment.type == "normal" then
-            love.graphics.print(displayedText, currentX, HEIGHT - 70)
-        elseif segment.type == "wavy" then
-            self:drawWavy(displayedText, currentX, HEIGHT - 70, segment.timeOffset)
-        elseif segment.type == "shaky" then
-            self:drawShaky(displayedText, currentX, HEIGHT - 70)
-        elseif segment.type == "rainbow" then
-            self:drawRainbow(displayedText, currentX, HEIGHT - 70)
+        local wrappedLines = self:wrapText(displayedText)
+        for _, line in ipairs(wrappedLines) do
+            if segment.type == "normal" then
+                love.graphics.print(line, 10, currentY)
+            elseif segment.type == "wavy" then
+                self:drawWavy(line, 10, currentY, segment.timeOffset)
+            elseif segment.type == "shaky" then
+                self:drawShaky(line, 10, currentY)
+            elseif segment.type == "rainbow" then
+                self:drawRainbow(line, 10, currentY)
+            end
+            currentY = currentY + font:getHeight()  -- Move down for the next line
         end
-        currentX = currentX + font:getWidth(displayedText)
     end
 end
 
@@ -255,7 +283,7 @@ local areas = {
 }
 
 local entities = {
-    Entity(assets, 18, 27, Dialogue("Hello dude!!! I wanted to know {wvy}How are you?{/wvy}")),
+    Entity(assets, 18, 27, Dialogue("Hello dude!!! I wanted to know {wvy}How are you?{/wvy} This is some long ass text to test out word wrapping!! Let's try {shk}SHAKING{/shk}")),
 }
 
 local currentArea = 1
